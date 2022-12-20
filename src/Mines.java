@@ -3,9 +3,10 @@ import javax.swing.JPanel;
 import javax.swing.JLabel;
 import javax.swing.ImageIcon;
 import java.awt.Dimension;
+import java.awt.Point;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.awt.event.ActionEvent;
+import java.awt.event.InputEvent;
 
 /**
  * <h1>Mines - A mine clearing game</h1>
@@ -17,7 +18,7 @@ import java.awt.event.ActionEvent;
  *
  * <b>Click : </b> <i>Clicking an unrevealed cell while NOT holding CTRL or ALT will clear the clicked cell</i><br><br>
  * <b>CTRL : </b> <i>Holding CTRL and clicking an unrevealed cell will place a flag at the clicked cell</i><br><br>
- * <b>ALT : </b> <i>Holding ALT and clicking a flagged cell will remove the flag from the clicked cell</i>
+ * <b>ALT : </b> <i>Holding ALT and clicking a flagged cell will remove the flag from the clicked cell</i><br><br>
  *
  * @since 2022-12-19
  * @version 0.0.0.1
@@ -27,8 +28,8 @@ public class Mines {
 
     /* private static final Strings */
     private static final String INSTRUCTIONS = "Mines - CTRL to place flag - ALT to remove flag";
-    private static final String GAME_OVER = "Mines - Game Over - ";
     private static final String VICTORY = "Mines - You Win - ";
+    private static final String FAILURE = "Mines - Game Over - ";
 
     /* public static final ImageIcons */
     public static final ImageIcon HI_ICON = new ImageIcon("img/hi.png");
@@ -40,11 +41,15 @@ public class Mines {
     public static final ImageIcon FLAG_ICON = new ImageIcon("img/flag.png");
     public static final ImageIcon MINE_ICON = new ImageIcon("img/mine.png");
     public static final ImageIcon CROWN_ICON = new ImageIcon("img/crown.png");
-    public static final ImageIcon[] NUMBER_ICONS = { null, new ImageIcon("img/one.png"), new ImageIcon("img/two.png"), new ImageIcon("img/three.png"), new ImageIcon("img/four.png"), new ImageIcon("img/five.png"), new ImageIcon("img/six.png"), new ImageIcon("img/seven.png"), new ImageIcon("img/eight.png") };
+    public static final ImageIcon[] NUMBER_ICONS = { null, 
+    		new ImageIcon("img/one.png"), new ImageIcon("img/two.png"), new ImageIcon("img/three.png"), 
+    		new ImageIcon("img/four.png"), new ImageIcon("img/five.png"), new ImageIcon("img/six.png"), 
+    		new ImageIcon("img/seven.png"), new ImageIcon("img/eight.png")
+    };
 
     /* private static final ints */
     private static final int ICON_SIZE_PX = HI_ICON.getImage().getWidth(null);
-    private static final int IS_MINE = 9;
+    private static final int IS_MINE = 9; // UNNECESSARY
 
     /* private final ints */
     private final int ROWS;
@@ -68,7 +73,7 @@ public class Mines {
     private boolean[][] revealed;
 
     /* game values */
-    private boolean isRunning = true;
+    private boolean isRunning;
     private int numberOfFlags = 0;
 
     /**
@@ -76,8 +81,13 @@ public class Mines {
      * @param ROWS : int rows of game board
      * @param COLS : int cols of game board
      * @param NUM_MINES : int number of mines on board
+     * @precondition ROWS & COLS must be at least 2 or greater
+     * @throws IllegalArgumentException : if ROWS or COLS is less than 2
+     * @throws IllegalArgumentException : if NUM_MINES is more than total number of cells
      */
     public Mines(int ROWS, int COLS, int NUM_MINES) {
+    	if (ROWS < 2 || COLS < 2) { throw new IllegalArgumentException("Mines(rows, cols, num_mines) : Trying to assign an illegal value to ROW or COL"); }
+    	if (NUM_MINES > (ROWS * COLS)) { throw new IllegalArgumentException("Mines(rows, cols, num_mines) : Trying to place more mines than there are available cells"); }
         this.ROWS = ROWS;
         this.COLS = COLS;
         this.NUM_MINES = NUM_MINES;
@@ -91,20 +101,21 @@ public class Mines {
     public void start() {
         flags = new boolean[ROWS][COLS];
         revealed = new boolean[ROWS][COLS];
-        mines = generateMines(ROWS, COLS, NUM_MINES);
-        neighbors = generateNeighbors(mines);
-        icons = generateLabels(ROWS, COLS);
+        mines = newRandomMines(ROWS, COLS, NUM_MINES);
+        neighbors = minesGridToNeighborsGrid(mines);
+        icons = newJLabelGrid(ROWS, COLS);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setResizable(false);
         frame.setIconImage(FLAG_ICON.getImage());
         panel.setPreferredSize(new Dimension(PANEL_WIDTH_PX, PANEL_HEIGHT_PX));
         panel.setLayout(null);
-        addIconsToPanel();
+        addJLabelsToPanel();
         panel.addMouseListener(mouseAdapter);
         frame.add(panel);
         frame.pack();
         frame.setLocationRelativeTo(null);
         frame.setVisible(true);
+        isRunning = true;
         tInit = System.currentTimeMillis();
     }
 
@@ -113,34 +124,38 @@ public class Mines {
         @Override
         public void mousePressed(MouseEvent e) {
             if (!isRunning) { reset(); return; }
-            int mod = e.getModifiers();
-            int row = (int) e.getPoint().getY() / ICON_SIZE_PX;
-            int col = (int) e.getPoint().getX() / ICON_SIZE_PX;
+            Point point = e.getPoint();
+            int row = (int) point.getY() / ICON_SIZE_PX;
+            int col = (int) point.getX() / ICON_SIZE_PX;
+            int mod = e.getModifiersEx();
             if (revealed[row][col]) { return; }
-            if (ctrlPressed(mod)) {
+            if (isCtrlPressed(mod)) {
                 if (flags[row][col]) { return; }
                 if (numberOfFlags >= NUM_MINES) { return; }
                 flags[row][col] = true;
                 icons[row][col].setIcon(FLAG_ICON);
                 ++numberOfFlags;
-                frame.setTitle(midgameTitle());
-                if (numberOfFlags >= NUM_MINES) { checkForVictory(); };
-            } else if (altPressed(mod)) {
+                frame.setTitle(currentTitleString());
+                if (isEveryMineFlagged()) {
+            		isRunning = false;
+            		showVictory();
+                }
+            } else if (isAltPressed(mod)) {
                 if (!flags[row][col]) { return; }
                 flags[row][col] = false;
                 icons[row][col].setIcon(HI_ICON);
                 --numberOfFlags;
-                frame.setTitle(midgameTitle());
+                frame.setTitle(currentTitleString());
             } else {
                 if (flags[row][col]) { return; }
                 if (mines[row][col]) {
-                    gameOver();
+                	isRunning = false;
+                    showFailure();
                 } else if (neighbors[row][col] != 0) {
                     icons[row][col].setIcon(NUMBER_ICONS[neighbors[row][col]]);
                     revealed[row][col] = true;
                 } else {
                     floodFill(row, col);
-                    checkForVictory();
                 }
             }
         }
@@ -162,33 +177,30 @@ public class Mines {
     private void clear(int r, int c) {
         for (int row = 0;row < ROWS;++row) {
             for (int col = 0;col < COLS;++col) {
-                if (!revealed[row][col] &&
+                if (isNeighbor(row, col, r, c) &&
+                	!revealed[row][col] &&
                     !mines[row][col] &&
-                    !flags[row][col] &&
-                    isNeighbor(row, col, r, c)) {
+                    !flags[row][col]) {
                     floodFill(row, col);
                 }
             }
         }
     }
-
-    /** Checks for victory by seeing if every mine has been flagged */
-    private void checkForVictory() {
-        int flagsOnMines = 0;
-        for (int row = 0;row < ROWS;++row) {
-            for (int col = 0;col < COLS;++col) {
-                if (mines[row][col] && flags[row][col]) { ++flagsOnMines; }
-            }
-        }
-        if (flagsOnMines == NUM_MINES) {
-            victory();
-        }
+    
+    /** Returns true if every mine has been flagged */
+    private boolean isEveryMineFlagged() {
+    	 int flagsOnMines = 0;
+         for (int row = 0;row < ROWS;++row) {
+             for (int col = 0;col < COLS;++col) {
+                 if (mines[row][col] && flags[row][col]) { ++flagsOnMines; }
+             }
+         }
+         return flagsOnMines == NUM_MINES;
     }
 
     /** Stops game from running, updates title, and sets Icons to green */
-    private void victory() {
-        isRunning = false;
-        frame.setTitle(VICTORY + ((float)getDurationMS() / 1000) + "s");
+    private void showVictory() {
+        frame.setTitle(VICTORY + ((float)currentDurationMS() / 1000) + "s");
         for (int row = 0;row < ROWS;++row) {
             for (int col = 0;col < COLS;++col) {
                 if (mines[row][col]) {
@@ -203,9 +215,8 @@ public class Mines {
     }
 
     /** Stops game from running, updates title, and sets Icons to red */
-    private void gameOver() {
-        isRunning = false;
-        frame.setTitle(GAME_OVER + ((float)getDurationMS() / 1000) + "s");
+    private void showFailure() {
+        frame.setTitle(FAILURE + ((float)currentDurationMS() / 1000) + "s");
         for (int row = 0;row < ROWS;++row) {
             for (int col = 0;col < COLS;++col) {
                 if (mines[row][col]) {
@@ -223,8 +234,8 @@ public class Mines {
     private void reset() {
         flags = new boolean[ROWS][COLS];
         revealed = new boolean[ROWS][COLS];
-        mines = generateMines(ROWS, COLS, NUM_MINES);
-        neighbors = generateNeighbors(mines);
+        mines = newRandomMines(ROWS, COLS, NUM_MINES);
+        neighbors = minesGridToNeighborsGrid(mines);
         for (int row = 0;row < ROWS;++row) {
             for (int col = 0;col < COLS;++col) {
                 icons[row][col].setIcon(HI_ICON);
@@ -236,18 +247,8 @@ public class Mines {
         tInit = System.currentTimeMillis();
     }
 
-    /** Returns the midgame title */
-    private String midgameTitle() {
-        return "Mines - Flags remaining: " + (NUM_MINES - numberOfFlags);
-    }
-
-    /** Returns the duration of game in milliseconds */
-    private long getDurationMS() {
-        return System.currentTimeMillis() - tInit;
-    }
-
     /** Adds all icons to the panel */
-    private void addIconsToPanel() {
+    private void addJLabelsToPanel() {
         for (int row = 0;row < ROWS;++row) {
             for (int col = 0;col < COLS;++col) {
                 panel.add(icons[row][col]);
@@ -256,7 +257,7 @@ public class Mines {
     }
 
     /** Generates a new 2D array of JLabels using the provided dimensions */
-    private static JLabel[][] generateLabels(int rows, int cols) {
+    private static JLabel[][] newJLabelGrid(int rows, int cols) {
         JLabel[][] icons = new JLabel[rows][cols];
         for (int row = 0;row < rows;++row) {
             for (int col = 0;col < cols;++col) {
@@ -268,10 +269,10 @@ public class Mines {
     }
 
     /** Generates a new 2D array of booleans representing mines using the provided dimensions and number of mines */
-    private static boolean[][] generateMines(int rows, int cols, int numMines) {
-        boolean[][] mines = new boolean[rows][cols];
-        int placedMines = 0;
+    private static boolean[][] newRandomMines(int rows, int cols, int numMines) {
         int row, col;
+        int placedMines = 0;
+        boolean[][] mines = new boolean[rows][cols];
         while (placedMines < numMines) {
             row = (int) (Math.random() * rows);
             col = (int) (Math.random() * cols);
@@ -284,22 +285,22 @@ public class Mines {
     }
 
     /** Generates a new 2D array of ints representing the count of neighboring mines per cell provided a boolean[][] of mines */
-    private static int[][] generateNeighbors(boolean[][] mines) {
+    private static int[][] minesGridToNeighborsGrid(boolean[][] mines) {
         int[][] neighbors = new int[mines.length][mines[0].length];
         for (int row = 0;row < mines.length;++row) {
             for (int col = 0;col < mines[row].length;++col) {
                 if (mines[row][col]) {
-                    neighbors[row][col] = IS_MINE;
+                    neighbors[row][col] = IS_MINE; // UNNECESSARY
                 } else {
-                    neighbors[row][col] = countNeighbors(row, col, mines);
+                    neighbors[row][col] = numberOfNeighboringMines(row, col, mines);
                 }
             }
         }
         return neighbors;
     }
 
-    /** Returns the int number of neighboring mines at a position withing a boolean[][] of mines */
-    private static int countNeighbors(int row, int col, boolean[][] mines) {
+    /** Returns the int number of neighboring mines at a position within a boolean[][] of mines */
+    private static int numberOfNeighboringMines(int row, int col, boolean[][] mines) {
         int neighbors = 0;
         for (int r = 0;r < mines.length;++r) {
             for (int c = 0;c < mines[row].length;++c) {
@@ -310,20 +311,30 @@ public class Mines {
         }
         return neighbors;
     }
+    
+    /** Returns the current title */
+    private String currentTitleString() {
+        return "Mines - Flags remaining: " + (NUM_MINES - numberOfFlags);
+    }
 
-    /** Returns boolean if provided indicies are neighbors */
+    /** Returns the current duration of the game in milliseconds */
+    private long currentDurationMS() {
+        return System.currentTimeMillis() - tInit;
+    }
+
+    /** Returns boolean if provided indices are neighbors */
     private static boolean isNeighbor(int row1, int col1, int row2, int col2) {
         return (Math.abs(row1 - row2) <= 1 && Math.abs(col1 - col2) <= 1) && (row1 != row2 || col1 != col2);
     }
 
     /** Returns boolean if provided mod matches CTRL mask */
-    private static boolean ctrlPressed(int mod) {
-        return (mod & ActionEvent.CTRL_MASK) != 0;
+    private static boolean isCtrlPressed(int mod) {
+    	return (mod & InputEvent.CTRL_DOWN_MASK) != 0;
     }
 
     /** Returns boolean if provided mod matches ALT mask */
-    private static boolean altPressed(int mod) {
-        return (mod & ActionEvent.ALT_MASK) != 0;
+    private static boolean isAltPressed(int mod) {
+    	return (mod & InputEvent.ALT_DOWN_MASK) != 0;
     }
 
 }
