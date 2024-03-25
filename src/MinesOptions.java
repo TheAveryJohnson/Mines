@@ -24,8 +24,8 @@ import java.awt.event.MouseEvent;
 public class MinesOptions {
 
 	/* Window components */
-	private JFrame frame = new JFrame("Mines - A mine clearing game");
-	private ImagePanel panel = new ImagePanel("img\\options.png");
+	private JFrame frame		= new JFrame("Mines - A mine clearing game");
+	private ImagePanel panel	= new ImagePanel("img\\options.png");
 
 	/* Window Icon */
 	private static final ImageIcon FLAG_ICON = new ImageIcon("img\\flag.png");
@@ -43,10 +43,10 @@ public class MinesOptions {
 	private static JLabel EXPERT_LABEL;
 
 	/* Option Labels Bounds */
-	private static final int OPTIONS_FIRST_ROW = 32;
-	private static final int OPTIONS_FIRST_COL = 36;
-	private static final int OPTIONS_SECOND_ROW = 80;
-	private static final int OPTIONS_SECOND_COL = 200;
+	private static final int OPTIONS_FIRST_ROW	= 32;
+	private static final int OPTIONS_FIRST_COL	= 36;
+	private static final int OPTIONS_SECOND_ROW	= 80;
+	private static final int OPTIONS_SECOND_COL	= 200;
 
 	/* Mines difficulty options */
 	private Mines beginner		= new Mines(8, 8, 10);
@@ -118,7 +118,7 @@ public class MinesOptions {
 					intermediate	= null;
 					advanced		= null;
 					expert			= null;
-					beginner		.start();
+					beginner.start();
 				}
 
 				/* If the user has selected the second column */
